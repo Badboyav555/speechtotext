@@ -1,0 +1,1272 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AuraVoice | AI Speech-to-Text</title>
+    <meta name="description" content="Professional AI Speech-to-Text application powered by Web Speech API">
+    
+    <style>
+        /* =========================================
+           CSS VARIABLES & RESET
+           ========================================= */
+        :root {
+            /* Light Theme */
+            --bg-color: #f0f2f5;
+            --text-primary: #1a1a2e;
+            --text-secondary: #5f6368;
+            --glass-bg: rgba(255, 255, 255, 0.75);
+            --glass-border: rgba(255, 255, 255, 0.6);
+            --primary-gradient: linear-gradient(135deg, #0061ff 0%, #60efff 100%);
+            --primary-color: #0061ff;
+            --accent-glow: rgba(0, 97, 255, 0.4);
+            --danger-color: #ff4757;
+            --success-color: #2ed573;
+            --card-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.1);
+            --font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+            --transition-speed: 0.3s;
+        }
+
+        [data-theme="dark"] {
+            /* Dark Theme */
+            --bg-color: #0a0e17;
+            --text-primary: #ffffff;
+            --text-secondary: #a0a0a0;
+            --glass-bg: rgba(20, 25, 40, 0.7);
+            --glass-border: rgba(255, 255, 255, 0.08);
+            --primary-gradient: linear-gradient(135deg, #0061ff 0%, #00d2ff 100%);
+            --primary-color: #00d2ff;
+            --accent-glow: rgba(0, 210, 255, 0.4);
+            --card-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.5);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            outline: none;
+        }
+
+        body {
+            font-family: var(--font-family);
+            background-color: var(--bg-color);
+            color: var(--text-primary);
+            height: 100vh;
+            overflow: hidden; /* Prevent body scroll, handle inside components */
+            transition: background-color var(--transition-speed);
+            position: relative;
+        }
+
+        /* Background Particle Canvas */
+        #particle-canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 0;
+            pointer-events: none;
+        }
+
+        /* =========================================
+           LAYOUT & GLASSMORPHISM
+           ========================================= */
+        .app-container {
+            position: relative;
+            z-index: 10;
+            display: flex;
+            flex-direction: column;
+            height: 100%;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 15px 25px;
+            margin-bottom: 20px;
+            background: var(--glass-bg);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid var(--glass-border);
+            border-radius: 16px;
+            box-shadow: var(--card-shadow);
+        }
+
+        .logo {
+            font-size: 1.5rem;
+            font-weight: 700;
+            background: var(--primary-gradient);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .header-controls {
+            display: flex;
+            gap: 15px;
+        }
+
+        .main-content {
+            flex: 1;
+            display: flex;
+            gap: 20px;
+            overflow: hidden;
+            position: relative;
+        }
+
+        /* =========================================
+           TRANSCRIPT AREA
+           ========================================= */
+        .transcript-card {
+            flex: 1;
+            background: var(--glass-bg);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid var(--glass-border);
+            border-radius: 20px;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            box-shadow: var(--card-shadow);
+            transition: all 0.3s ease;
+        }
+
+        .visualizer-area {
+            height: 80px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: rgba(0,0,0,0.02);
+            border-bottom: 1px solid var(--glass-border);
+            position: relative;
+        }
+
+        /* Simulated Waveform Animation */
+        .waveform {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            height: 40px;
+            opacity: 0.3;
+            transition: opacity 0.3s;
+        }
+
+        .waveform.active {
+            opacity: 1;
+        }
+
+        .bar {
+            width: 6px;
+            background: var(--primary-color);
+            border-radius: 99px;
+            animation: bounce 1s infinite ease-in-out;
+            height: 10px;
+        }
+
+        @keyframes bounce {
+            0%, 100% { height: 10px; }
+            50% { height: 40px; }
+        }
+
+        /* Stagger animations */
+        .bar:nth-child(1) { animation-duration: 0.8s; }
+        .bar:nth-child(2) { animation-duration: 1.1s; }
+        .bar:nth-child(3) { animation-duration: 1.3s; }
+        .bar:nth-child(4) { animation-duration: 0.9s; }
+        .bar:nth-child(5) { animation-duration: 1.2s; }
+        .bar:nth-child(6) { animation-duration: 1.0s; }
+        .bar:nth-child(7) { animation-duration: 1.4s; }
+
+        .status-badge {
+            position: absolute;
+            top: 10px;
+            right: 15px;
+            font-size: 0.8rem;
+            padding: 4px 12px;
+            border-radius: 20px;
+            background: rgba(0,0,0,0.05);
+            color: var(--text-secondary);
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            transition: all 0.3s;
+        }
+
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background-color: #ccc;
+        }
+
+        .status-badge.listening {
+            background: rgba(46, 213, 115, 0.15);
+            color: var(--success-color);
+        }
+        .status-badge.listening .status-dot {
+            background-color: var(--success-color);
+            box-shadow: 0 0 8px var(--success-color);
+            animation: pulse-dot 1.5s infinite;
+        }
+
+        @keyframes pulse-dot {
+            0% { box-shadow: 0 0 0 0 rgba(46, 213, 115, 0.7); }
+            70% { box-shadow: 0 0 0 6px rgba(46, 213, 115, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(46, 213, 115, 0); }
+        }
+
+        .transcript-area {
+            flex: 1;
+            padding: 20px;
+            overflow-y: auto;
+            font-size: 1.1rem;
+            line-height: 1.6;
+            color: var(--text-primary);
+            border: none;
+            resize: none;
+            background: transparent;
+            width: 100%;
+        }
+
+        .transcript-area::placeholder {
+            color: var(--text-secondary);
+            opacity: 0.6;
+        }
+
+        .interim-text {
+            color: var(--text-secondary);
+            font-style: italic;
+        }
+
+        .final-text {
+            color: var(--text-primary);
+        }
+
+        /* Custom Scrollbar */
+        .transcript-area::-webkit-scrollbar {
+            width: 8px;
+        }
+        .transcript-area::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        .transcript-area::-webkit-scrollbar-thumb {
+            background: rgba(128, 128, 128, 0.3);
+            border-radius: 4px;
+        }
+        .transcript-area::-webkit-scrollbar-thumb:hover {
+            background: rgba(128, 128, 128, 0.5);
+        }
+
+        /* =========================================
+           CONTROLS SIDEBAR
+           ========================================= */
+        .controls-sidebar {
+            width: 300px;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        @media (max-width: 900px) {
+            .main-content {
+                flex-direction: column;
+            }
+            .controls-sidebar {
+                width: 100%;
+                flex-direction: row;
+                flex-wrap: wrap;
+            }
+            .control-card {
+                flex: 1;
+                min-width: 250px;
+            }
+        }
+
+        .control-card {
+            background: var(--glass-bg);
+            backdrop-filter: blur(12px);
+            border: 1px solid var(--glass-border);
+            border-radius: 20px;
+            padding: 20px;
+            box-shadow: var(--card-shadow);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+
+        /* Microphone Button */
+        .mic-btn-container {
+            position: relative;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+
+        .mic-btn {
+            width: 80px;
+            height: 80px;
+            border-radius: 50%;
+            border: none;
+            background: var(--bg-color);
+            color: var(--text-secondary);
+            font-size: 2rem;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+            z-index: 2;
+        }
+
+        .mic-btn:hover {
+            transform: scale(1.05);
+            box-shadow: 0 8px 25px rgba(0,0,0,0.15);
+        }
+
+        .mic-btn.recording {
+            background: var(--primary-gradient);
+            color: white;
+            box-shadow: 0 0 0 0 var(--accent-glow);
+            animation: pulse-glow 1.5s infinite;
+        }
+
+        @keyframes pulse-glow {
+            0% { transform: scale(1); box-shadow: 0 0 0 0 var(--accent-glow); }
+            70% { transform: scale(1.1); box-shadow: 0 0 0 20px rgba(0, 97, 255, 0); }
+            100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(0, 97, 255, 0); }
+        }
+
+        .mic-hint {
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+            margin-top: 10px;
+            text-align: center;
+        }
+
+        .shortcut-hint {
+            font-size: 0.75rem;
+            opacity: 0.7;
+            background: rgba(0,0,0,0.05);
+            padding: 2px 6px;
+            border-radius: 4px;
+            margin-top: 5px;
+            display: inline-block;
+        }
+
+        /* Select Dropdown */
+        .select-wrapper {
+            position: relative;
+            width: 100%;
+            margin-top: 15px;
+        }
+
+        select {
+            width: 100%;
+            padding: 12px 15px;
+            border-radius: 12px;
+            border: 1px solid var(--glass-border);
+            background: var(--bg-color);
+            color: var(--text-primary);
+            font-size: 0.95rem;
+            appearance: none;
+            cursor: pointer;
+            transition: border-color 0.3s;
+        }
+
+        select:focus {
+            border-color: var(--primary-color);
+        }
+
+        .select-arrow {
+            position: absolute;
+            right: 15px;
+            top: 50%;
+            transform: translateY(-50%);
+            pointer-events: none;
+            color: var(--text-secondary);
+        }
+
+        /* Action Buttons Grid */
+        .actions-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            width: 100%;
+            margin-top: 15px;
+        }
+
+        .btn {
+            padding: 10px 15px;
+            border-radius: 10px;
+            border: none;
+            cursor: pointer;
+            font-size: 0.9rem;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            transition: all 0.2s;
+            color: var(--text-primary);
+            background: rgba(128,128,128,0.1);
+        }
+
+        .btn:hover {
+            background: rgba(128,128,128,0.2);
+            transform: translateY(-2px);
+        }
+
+        .btn-primary {
+            background: var(--primary-gradient);
+            color: white;
+        }
+        .btn-primary:hover {
+            opacity: 0.9;
+            box-shadow: 0 4px 15px var(--accent-glow);
+        }
+
+        .btn-danger {
+            color: var(--danger-color);
+            background: rgba(255, 71, 87, 0.1);
+        }
+        .btn-danger:hover {
+            background: rgba(255, 71, 87, 0.2);
+        }
+
+        /* Stats */
+        .stats-container {
+            display: flex;
+            justify-content: space-between;
+            width: 100%;
+            margin-top: 20px;
+            padding-top: 15px;
+            border-top: 1px solid var(--glass-border);
+        }
+
+        .stat-item {
+            text-align: center;
+        }
+        .stat-value {
+            font-weight: 700;
+            font-size: 1.1rem;
+            color: var(--primary-color);
+        }
+        .stat-label {
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        /* =========================================
+           HISTORY SIDEBAR (Slide-out)
+           ========================================= */
+        .history-panel {
+            position: fixed;
+            top: 0;
+            right: -350px;
+            width: 350px;
+            height: 100%;
+            background: var(--bg-color);
+            z-index: 100;
+            box-shadow: -5px 0 25px rgba(0,0,0,0.2);
+            transition: right 0.4s cubic-bezier(0.77, 0, 0.175, 1);
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            border-left: 1px solid var(--glass-border);
+        }
+
+        .history-panel.open {
+            right: 0;
+        }
+
+        .history-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid var(--glass-border);
+        }
+
+        .history-list {
+            flex: 1;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .history-item {
+            padding: 12px;
+            background: var(--glass-bg);
+            border: 1px solid var(--glass-border);
+            border-radius: 10px;
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+
+        .history-item:hover {
+            transform: translateX(-5px);
+            border-color: var(--primary-color);
+        }
+
+        .history-date {
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            margin-bottom: 4px;
+        }
+
+        .history-preview {
+            font-size: 0.9rem;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            color: var(--text-primary);
+        }
+
+        .close-history {
+            background: none;
+            border: none;
+            font-size: 1.5rem;
+            cursor: pointer;
+            color: var(--text-secondary);
+        }
+
+        /* Overlay for modal/history */
+        .overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.5);
+            z-index: 90;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.3s;
+            backdrop-filter: blur(2px);
+        }
+
+        .overlay.active {
+            opacity: 1;
+            pointer-events: auto;
+        }
+
+        /* Toast Notification */
+        .toast {
+            position: fixed;
+            bottom: 30px;
+            left: 50%;
+            transform: translateX(-50%) translateY(100px);
+            background: var(--text-primary);
+            color: var(--bg-color);
+            padding: 12px 24px;
+            border-radius: 30px;
+            font-weight: 600;
+            z-index: 200;
+            opacity: 0;
+            transition: all 0.3s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+        }
+
+        .toast.show {
+            transform: translateX(-50%) translateY(0);
+            opacity: 1;
+        }
+
+        /* SVG Icons */
+        .icon {
+            width: 20px;
+            height: 20px;
+            stroke-width: 2;
+            stroke: currentColor;
+            fill: none;
+            stroke-linecap: round;
+            stroke-linejoin: round;
+        }
+
+        .theme-toggle {
+            background: none;
+            border: none;
+            cursor: pointer;
+            color: var(--text-primary);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 5px;
+            border-radius: 50%;
+            transition: background 0.3s;
+        }
+        .theme-toggle:hover {
+            background: rgba(128,128,128,0.1);
+        }
+
+        /* Mobile Adjustments */
+        @media (max-width: 600px) {
+            .header-controls span {
+                display: none;
+            }
+            .history-panel {
+                width: 100%;
+                right: -100%;
+            }
+            .logo {
+                font-size: 1.2rem;
+            }
+            .mic-btn {
+                width: 70px;
+                height: 70px;
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Particle Background -->
+    <canvas id="particle-canvas"></canvas>
+
+    <!-- App Container -->
+    <div class="app-container">
+        
+        <!-- Header -->
+        <header>
+            <div class="logo">
+                <svg class="icon" viewBox="0 0 24 24" style="color: var(--primary-color);">
+                    <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path>
+                    <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
+                    <line x1="12" y1="19" x2="12" y2="23"></line>
+                    <line x1="8" y1="23" x2="16" y2="23"></line>
+                </svg>
+                AuraVoice
+            </div>
+            <div class="header-controls">
+                <button class="theme-toggle" id="theme-btn" aria-label="Toggle Theme">
+                    <svg class="icon" id="theme-icon" viewBox="0 0 24 24">
+                        <circle cx="12" cy="12" r="5"></circle>
+                        <line x1="12" y1="1" x2="12" y2="3"></line>
+                        <line x1="12" y1="21" x2="12" y2="23"></line>
+                        <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+                        <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+                        <line x1="1" y1="12" x2="3" y2="12"></line>
+                        <line x1="21" y1="12" x2="23" y2="12"></line>
+                        <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+                        <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+                    </svg>
+                </button>
+                <button class="btn" id="history-toggle-btn">
+                    <svg class="icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+                    <span>History</span>
+                </button>
+            </div>
+        </header>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            
+            <!-- Transcript Card -->
+            <section class="transcript-card">
+                <div class="visualizer-area">
+                    <div class="waveform" id="waveform">
+                        <div class="bar"></div><div class="bar"></div><div class="bar"></div>
+                        <div class="bar"></div><div class="bar"></div><div class="bar"></div>
+                        <div class="bar"></div>
+                    </div>
+                    <div class="status-badge" id="status-badge">
+                        <div class="status-dot"></div>
+                        <span id="status-text">Idle</span>
+                    </div>
+                </div>
+
+                <textarea class="transcript-area" id="transcript" placeholder="Press the microphone button or use Spacebar to start speaking..."></textarea>
+                
+                <div class="stats-container">
+                    <div class="stat-item">
+                        <div class="stat-value" id="word-count">0</div>
+                        <div class="stat-label">Words</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-value" id="char-count">0</div>
+                        <div class="stat-label">Characters</div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Controls Sidebar -->
+            <aside class="controls-sidebar">
+                <!-- Main Controls -->
+                <div class="control-card">
+                    <div class="mic-btn-container">
+                        <button class="mic-btn" id="mic-btn" aria-label="Start Recording">
+                            <svg class="icon" viewBox="0 0 24 24" id="mic-icon">
+                                <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path>
+                                <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
+                                <line x1="12" y1="19" x2="12" y2="23"></line>
+                                <line x1="8" y1="23" x2="16" y2="23"></line>
+                            </svg>
+                        </button>
+                    </div>
+                    <div class="mic-hint">
+                        Click to Record
+                        <br>
+                        <span class="shortcut-hint">Spacebar</span>
+                    </div>
+
+                    <div class="select-wrapper">
+                        <select id="language-select">
+                            <option value="en-US">English (US)</option>
+                            <option value="en-GB">English (UK)</option>
+                            <option value="hi-IN">Hindi</option>
+                            <option value="en-IN">Hinglish (India)</option>
+                            <option value="es-ES">Spanish</option>
+                            <option value="fr-FR">French</option>
+                            <option value="de-DE">German</option>
+                            <option value="ja-JP">Japanese</option>
+                            <option value="zh-CN">Chinese (Simplified)</option>
+                        </select>
+                        <div class="select-arrow">
+                            <svg class="icon" viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Actions -->
+                <div class="control-card">
+                    <div class="actions-grid">
+                        <button class="btn" id="copy-btn">
+                            <svg class="icon" viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+                            Copy
+                        </button>
+                        <button class="btn" id="download-btn">
+                            <svg class="icon" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+                            Save
+                        </button>
+                        <button class="btn btn-danger" id="clear-btn" style="grid-column: span 2;">
+                            <svg class="icon" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+                            Clear Transcript
+                        </button>
+                    </div>
+                </div>
+            </aside>
+        </main>
+    </div>
+
+    <!-- History Panel -->
+    <div class="overlay" id="overlay"></div>
+    <aside class="history-panel" id="history-panel">
+        <div class="history-header">
+            <h3>Recent Transcripts</h3>
+            <button class="close-history" id="close-history">&times;</button>
+        </div>
+        <div class="history-list" id="history-list">
+            <!-- History items injected here -->
+            <p style="text-align: center; color: var(--text-secondary); margin-top: 20px;">No history yet.</p>
+        </div>
+        <button class="btn btn-danger" id="clear-history-btn" style="margin-top: 15px;">Clear All History</button>
+    </aside>
+
+    <!-- Toast -->
+    <div class="toast" id="toast">Notification</div>
+
+    <script>
+        /* =========================================
+           JAVASCRIPT LOGIC
+           ========================================= */
+
+        // --- DOM Elements ---
+        const micBtn = document.getElementById('mic-btn');
+        const micIcon = document.getElementById('mic-icon');
+        const transcriptArea = document.getElementById('transcript');
+        const statusBadge = document.getElementById('status-badge');
+        const statusText = document.getElementById('status-text');
+        const waveform = document.getElementById('waveform');
+        const languageSelect = document.getElementById('language-select');
+        const wordCountEl = document.getElementById('word-count');
+        const charCountEl = document.getElementById('char-count');
+        const copyBtn = document.getElementById('copy-btn');
+        const downloadBtn = document.getElementById('download-btn');
+        const clearBtn = document.getElementById('clear-btn');
+        const themeBtn = document.getElementById('theme-btn');
+        const historyToggleBtn = document.getElementById('history-toggle-btn');
+        const historyPanel = document.getElementById('history-panel');
+        const closeHistoryBtn = document.getElementById('close-history');
+        const overlay = document.getElementById('overlay');
+        const historyList = document.getElementById('history-list');
+        const clearHistoryBtn = document.getElementById('clear-history-btn');
+        const toast = document.getElementById('toast');
+
+        // --- State Variables ---
+        let isRecording = false;
+        let recognition;
+        let finalTranscript = '';
+        let savedTranscripts = JSON.parse(localStorage.getItem('auraVoiceHistory')) || [];
+
+        // --- Initialization ---
+        document.addEventListener('DOMContentLoaded', () => {
+            initSpeechRecognition();
+            initTheme();
+            renderHistory();
+            initParticles();
+        });
+
+        // --- Speech Recognition Setup ---
+        function initSpeechRecognition() {
+            const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+
+            if (!SpeechRecognition) {
+                statusText.textContent = "Not Supported";
+                statusBadge.style.color = "var(--danger-color)";
+                micBtn.disabled = true;
+                micBtn.style.cursor = "not-allowed";
+                transcriptArea.value = "Your browser does not support the Web Speech API. Please use Google Chrome, Edge, or Safari.";
+                return;
+            }
+
+            recognition = new SpeechRecognition();
+            recognition.continuous = true; // Keep listening
+            recognition.interimResults = true; // Show results while speaking
+            recognition.lang = languageSelect.value;
+
+            recognition.onstart = () => {
+                isRecording = true;
+                updateUIState(true);
+            };
+
+            recognition.onend = () => {
+                // If stopped manually or error, stop. If silence, restart if "continuous" desired.
+                // For this UX, we'll stop if onend triggers, unless we want auto-restart logic.
+                // We'll stick to manual stop for clarity, or restart if it was an accidental cut-off while 'recording' flag is true.
+                if(isRecording) {
+                   try { recognition.start(); } catch(e) { isRecording = false; updateUIState(false); }
+                } else {
+                    updateUIState(false);
+                }
+            };
+
+            recognition.onresult = (event) => {
+                let interimTranscript = '';
+                
+                for (let i = event.resultIndex; i < event.results.length; ++i) {
+                    if (event.results[i].isFinal) {
+                        finalTranscript += event.results[i][0].transcript + '. ';
+                    } else {
+                        interimTranscript += event.results[i][0].transcript;
+                    }
+                }
+
+                // Combine logic
+                // We append the final to the textarea value to persist it
+                // The textarea will act as the "buffer" for all finalized text
+                // We need to separate what's already in the box from the new text if we were doing complex diffing,
+                // but simpler approach: Textarea holds all finalized text. 
+                
+                // Actually, to make it editable, we treat the textarea as the source of truth for finalized text.
+                // We just append new final segments.
+                
+                // But the event returns a session. If user edits text, simple concatenation breaks.
+                // Approach: The 'finalTranscript' var holds the NEW session text.
+                
+                // Let's reset strategy: 
+                // 1. Read current textarea value.
+                // 2. If new result is final, append to textarea.
+                // 3. Display interim text in a floating div or just append to textarea visually? 
+                //    Appending to textarea makes it hard to distinguish interim.
+                
+                // Better UX: Update textarea value directly.
+                // Note: If user edits manually, we might overwrite if we aren't careful.
+                // For this tool, we assume primarily dictation.
+                
+                // Let's refine: 
+                // We will append 'finalTranscript' (accumulated in this session) to the textarea.
+                // We will show 'interimTranscript' separately.
+                
+                // Wait, standard implementation:
+                // `interimTranscript` variable accumulates for THIS event firing.
+                // `finalTranscript` variable accumulates for the whole recognition session.
+                
+                // To allow editing, we only append NEW final text to the textarea.
+                // We need to track what we have already added.
+            };
+
+            // Let's use a simpler handler logic to support editing
+            let lastFinalIndex = 0;
+
+            recognition.onresult = (event) => {
+                let interimTranscript = '';
+                let newFinalTranscript = '';
+
+                for (let i = event.resultIndex; i < event.results.length; ++i) {
+                    if (event.results[i].isFinal) {
+                        newFinalTranscript += event.results[i][0].transcript + ' ';
+                    } else {
+                        interimTranscript += event.results[i][0].transcript;
+                    }
+                }
+
+                if (newFinalTranscript) {
+                    // Append to the text area
+                    // Add a newline if it's a new sentence logic (heuristic) or just space
+                    // We'll add a space.
+                    transcriptArea.value += newFinalTranscript;
+                    
+                    // Auto-scroll
+                    transcriptArea.scrollTop = transcriptArea.scrollHeight;
+                    
+                    updateStats();
+                }
+                
+                // Visual feedback for interim text could go here, 
+                // but updating the textarea directly with temporary text makes it jumpy.
+                // We will ignore displaying interim text in the textarea to keep it clean,
+                // or we could have a separate overlay. Let's keep it clean: only finalized text in box.
+                // However, seeing what you say is important.
+                // Let's create a temporary overlay span or just rely on the waveform + audio feedback.
+                // UPDATE: Let's use the placeholder or a floating status to show interim text for feedback.
+                if(interimTranscript) {
+                    statusText.textContent = `Listening: "${interimTranscript}"`;
+                } else {
+                    statusText.textContent = "Listening...";
+                }
+            };
+
+            recognition.onerror = (event) => {
+                console.error("Speech Error:", event.error);
+                if (event.error === 'not-allowed') {
+                    showToast("Microphone access denied.");
+                    isRecording = false;
+                    updateUIState(false);
+                } else if (event.error === 'no-speech') {
+                    // Ignore silence usually
+                } else {
+                    isRecording = false;
+                    updateUIState(false);
+                }
+            };
+        }
+
+        // Language Change
+        languageSelect.addEventListener('change', () => {
+            if (recognition) {
+                recognition.lang = languageSelect.value;
+                if(isRecording) {
+                    stopRecording();
+                    setTimeout(startRecording, 500); // Restart with new lang
+                }
+            }
+        });
+
+        // --- Recording Control ---
+        function startRecording() {
+            if (!recognition) return;
+            try {
+                finalTranscript = ''; // Reset session buffer
+                recognition.start();
+            } catch (e) {
+                console.log("Already started");
+            }
+        }
+
+        function stopRecording() {
+            if (!recognition) return;
+            isRecording = false;
+            recognition.stop();
+            // Save to history logic on stop
+            if(transcriptArea.value.trim().length > 0) {
+                saveToHistory(transcriptArea.value.trim());
+            }
+        }
+
+        function toggleRecording() {
+            if (isRecording) {
+                stopRecording();
+            } else {
+                startRecording();
+            }
+        }
+
+        micBtn.addEventListener('click', toggleRecording);
+
+        // Keyboard Shortcuts
+        document.addEventListener('keydown', (e) => {
+            // Space to toggle (prevent scrolling if focus is not in textarea)
+            if (e.code === 'Space' && document.activeElement !== transcriptArea) {
+                e.preventDefault();
+                toggleRecording();
+            }
+            // Ctrl+C to copy if focus is in textarea (default browser behavior), 
+            // but if focus is elsewhere, copy transcript content.
+            if (e.ctrlKey && e.code === 'KeyC' && document.activeElement !== transcriptArea) {
+                e.preventDefault();
+                copyToClipboard();
+            }
+        });
+
+        // --- UI Updates ---
+        function updateUIState(recording) {
+            if (recording) {
+                micBtn.classList.add('recording');
+                // Change icon to stop
+                micIcon.innerHTML = '<rect x="6" y="6" width="12" height="12"></rect><rect x="6" y="6" width="12" height="12" transform="rotate(45 12 12)" style="display:none"></rect>'; // Simplified square
+                // Better square icon:
+                micIcon.innerHTML = '<rect x="6" y="6" width="12" height="12" rx="2" ry="2"></rect>';
+                
+                statusBadge.classList.add('listening');
+                waveform.classList.add('active');
+                transcriptArea.placeholder = "Listening... Speak clearly.";
+            } else {
+                micBtn.classList.remove('recording');
+                // Revert to mic icon
+                micIcon.innerHTML = '<path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path><path d="M19 10v2a7 7 0 0 1-14 0v-2"></path><line x1="12" y1="19" x2="12" y2="23"></line><line x1="8" y1="23" x2="16" y2="23"></line>';
+                
+                statusBadge.classList.remove('listening');
+                waveform.classList.remove('active');
+                statusText.textContent = "Idle";
+                transcriptArea.placeholder = "Press the microphone button or use Spacebar to start speaking...";
+            }
+        }
+
+        // --- Stats ---
+        function updateStats() {
+            const text = transcriptArea.value;
+            charCountEl.textContent = text.length;
+            
+            // Word count regex
+            const words = text.trim() === '' ? 0 : text.trim().split(/\s+/).length;
+            wordCountEl.textContent = words;
+        }
+
+        transcriptArea.addEventListener('input', updateStats);
+
+        // --- Actions ---
+        function showToast(message) {
+            toast.textContent = message;
+            toast.classList.add('show');
+            setTimeout(() => {
+                toast.classList.remove('show');
+            }, 3000);
+        }
+
+        function copyToClipboard() {
+            if (!transcriptArea.value) return;
+            navigator.clipboard.writeText(transcriptArea.value).then(() => {
+                showToast("Transcript copied to clipboard!");
+            });
+        }
+
+        copyBtn.addEventListener('click', copyToClipboard);
+
+        downloadBtn.addEventListener('click', () => {
+            if (!transcriptArea.value) return;
+            const blob = new Blob([transcriptArea.value], { type: 'text/plain' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            const date = new Date().toISOString().slice(0,10);
+            a.download = `transcript_${date}.txt`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+            showToast("Transcript downloaded!");
+        });
+
+        clearBtn.addEventListener('click', () => {
+            if(confirm("Are you sure you want to clear the current transcript?")) {
+                transcriptArea.value = '';
+                updateStats();
+                showToast("Transcript cleared.");
+            }
+        });
+
+        // --- History Management ---
+        function saveToHistory(text) {
+            // Avoid duplicates or empty
+            if(!text || text.length < 2) return;
+            
+            // Check if last entry is identical (prevent spam save on stop)
+            if(savedTranscripts.length > 0 && savedTranscripts[0].text === text) return;
+
+            const entry = {
+                id: Date.now(),
+                text: text,
+                date: new Date().toLocaleString()
+            };
+
+            savedTranscripts.unshift(entry); // Add to top
+            if (savedTranscripts.length > 20) savedTranscripts.pop(); // Limit to 20
+            
+            localStorage.setItem('auraVoiceHistory', JSON.stringify(savedTranscripts));
+            renderHistory();
+        }
+
+        function renderHistory() {
+            historyList.innerHTML = '';
+            if (savedTranscripts.length === 0) {
+                historyList.innerHTML = '<p style="text-align: center; color: var(--text-secondary); margin-top: 20px;">No history yet.</p>';
+                return;
+            }
+
+            savedTranscripts.forEach(item => {
+                const div = document.createElement('div');
+                div.className = 'history-item';
+                div.innerHTML = `
+                    <div class="history-date">${item.date}</div>
+                    <div class="history-preview">${item.text}</div>
+                `;
+                div.addEventListener('click', () => {
+                    if(confirm("Load this transcript? Current unsaved changes will be lost.")) {
+                        transcriptArea.value = item.text;
+                        updateStats();
+                        toggleHistoryPanel();
+                    }
+                });
+                historyList.appendChild(div);
+            });
+        }
+
+        clearHistoryBtn.addEventListener('click', () => {
+            if(confirm("Clear all saved history?")) {
+                savedTranscripts = [];
+                localStorage.removeItem('auraVoiceHistory');
+                renderHistory();
+                showToast("History cleared.");
+            }
+        });
+
+        // --- Panel Toggles ---
+        function toggleHistoryPanel() {
+            historyPanel.classList.toggle('open');
+            overlay.classList.toggle('active');
+        }
+
+        historyToggleBtn.addEventListener('click', toggleHistoryPanel);
+        closeHistoryBtn.addEventListener('click', toggleHistoryPanel);
+        overlay.addEventListener('click', toggleHistoryPanel);
+
+        // --- Theme Toggle ---
+        function initTheme() {
+            const savedTheme = localStorage.getItem('auraVoiceTheme') || 'light';
+            document.documentElement.setAttribute('data-theme', savedTheme);
+            updateThemeIcon(savedTheme);
+        }
+
+        themeBtn.addEventListener('click', () => {
+            const current = document.documentElement.getAttribute('data-theme');
+            const next = current === 'light' ? 'dark' : 'light';
+            document.documentElement.setAttribute('data-theme', next);
+            localStorage.setItem('auraVoiceTheme', next);
+            updateThemeIcon(next);
+        });
+
+        function updateThemeIcon(theme) {
+            const svg = themeBtn.querySelector('svg');
+            if (theme === 'dark') {
+                // Moon icon
+                svg.innerHTML = '<path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>';
+            } else {
+                // Sun icon
+                svg.innerHTML = '<circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>';
+            }
+        }
+
+        // --- Particle Background Animation ---
+        function initParticles() {
+            const canvas = document.getElementById('particle-canvas');
+            const ctx = canvas.getContext('2d');
+            
+            let width, height;
+            let particles = [];
+            
+            // Configuration
+            const particleCount = 60;
+            const connectionDistance = 150;
+            
+            function resize() {
+                width = canvas.width = window.innerWidth;
+                height = canvas.height = window.innerHeight;
+            }
+            
+            class Particle {
+                constructor() {
+                    this.x = Math.random() * width;
+                    this.y = Math.random() * height;
+                    this.vx = (Math.random() - 0.5) * 0.5;
+                    this.vy = (Math.random() - 0.5) * 0.5;
+                    this.size = Math.random() * 2 + 1;
+                }
+                
+                update() {
+                    this.x += this.vx;
+                    this.y += this.vy;
+                    
+                    // Bounce off edges
+                    if (this.x < 0 || this.x > width) this.vx *= -1;
+                    if (this.y < 0 || this.y > height) this.vy *= -1;
+                }
+                
+                draw() {
+                    const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+                    ctx.fillStyle = isDark ? 'rgba(0, 210, 255, 0.5)' : 'rgba(0, 97, 255, 0.5)';
+                    ctx.beginPath();
+                    ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+            }
+            
+            function init() {
+                resize();
+                particles = [];
+                for (let i = 0; i < particleCount; i++) {
+                    particles.push(new Particle());
+                }
+            }
+            
+            function animate() {
+                ctx.clearRect(0, 0, width, height);
+                
+                const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+                
+                for (let i = 0; i < particles.length; i++) {
+                    particles[i].update();
+                    particles[i].draw();
+                    
+                    // Draw connections
+                    for (let j = i; j < particles.length; j++) {
+                        const dx = particles[i].x - particles[j].x;
+                        const dy = particles[i].y - particles[j].y;
+                        const distance = Math.sqrt(dx * dx + dy * dy);
+                        
+                        if (distance < connectionDistance) {
+                            ctx.beginPath();
+                            ctx.strokeStyle = isDark 
+                                ? `rgba(0, 210, 255, ${1 - distance / connectionDistance})` 
+                                : `rgba(0, 97, 255, ${0.15 * (1 - distance / connectionDistance)})`;
+                            ctx.lineWidth = 1;
+                            ctx.moveTo(particles[i].x, particles[i].y);
+                            ctx.lineTo(particles[j].x, particles[j].y);
+                            ctx.stroke();
+                        }
+                    }
+                }
+                
+                requestAnimationFrame(animate);
+            }
+            
+            window.addEventListener('resize', resize);
+            init();
+            animate();
+        }
+
+    </script>
+</body>
+</html>
